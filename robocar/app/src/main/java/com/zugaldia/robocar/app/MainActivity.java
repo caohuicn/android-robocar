@@ -4,7 +4,6 @@ import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 
-import com.zugaldia.robocar.app.autonomous.CameraDriver;
 import com.zugaldia.robocar.app.autonomous.TensorFlowTrainer;
 import com.zugaldia.robocar.app.manual.L298NDriver;
 import com.zugaldia.robocar.app.speech.PocketSphinx;
@@ -23,16 +22,10 @@ import timber.log.Timber;
 
 public class MainActivity extends AppCompatActivity implements HTTPRequestListener, TtsSpeaker.Listener, PocketSphinx.Listener {
 
-    private static final int SPEECH_REQUEST_CODE = 1111;
     private L298NDriver l298NDriver;
 
-    private CameraDriver cameraDriver;
     private TensorFlowTrainer tensorFlowTrainer;
 
-    // I2C Name
-    public static final String I2C_DEVICE_NAME = "I2C1";
-    // Adafruit Motor Hat
-    private static final int MOTOR_HAT_I2C_ADDRESS = 0x60;
     private LocalWebServer localWebServer;
 
     private enum State {
@@ -41,7 +34,7 @@ public class MainActivity extends AppCompatActivity implements HTTPRequestListen
         CONFIRMING_KEYPHRASE,
         LISTENING_TO_ACTION,
         CONFIRMING_ACTION,
-        CONFIRM_STOP_ACTION,
+        CONFIRMING_DONE_ACTION,
         TIMEOUT
     }
 
@@ -62,7 +55,6 @@ public class MainActivity extends AppCompatActivity implements HTTPRequestListen
         tts = new TtsSpeaker(this, this);
     }
 
-
     private void setupWebServer() {
         localWebServer = new LocalWebServer(this);
         try {
@@ -81,7 +73,6 @@ public class MainActivity extends AppCompatActivity implements HTTPRequestListen
         tts.onDestroy();
         pocketsphinx.onDestroy();
     }
-
 
     /*
      * Implement RequestListener (web server)
@@ -154,7 +145,7 @@ public class MainActivity extends AppCompatActivity implements HTTPRequestListen
     private void updateRecognizerState() {
         switch (state) {
             case INITIALIZING:
-            case CONFIRM_STOP_ACTION:
+            case CONFIRMING_DONE_ACTION:
             case TIMEOUT:
                 state = State.LISTENING_TO_KEYPHRASE;
                 pocketsphinx.startListeningToActivationPhrase();
@@ -201,7 +192,7 @@ public class MainActivity extends AppCompatActivity implements HTTPRequestListen
             answer = "Thank you!";
             speed.setLeft(0);
             speed.setRight(0);
-            state = State.CONFIRM_STOP_ACTION;
+            state = State.CONFIRMING_DONE_ACTION;
         } else if (input.contains("forward")) {
             answer = "Moving";
             speed.setLeft(SPEED_NORMAL);

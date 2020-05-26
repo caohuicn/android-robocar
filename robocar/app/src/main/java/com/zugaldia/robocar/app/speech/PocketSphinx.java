@@ -28,6 +28,7 @@ public class PocketSphinx implements RecognitionListener {
     private static final String TAG = PocketSphinx.class.getSimpleName();
     //3-4 syllables are recommended for keywords
     //sensitivity better between 1e-5 (accurate) to 1e-50 (sensitive)
+    //see commands.gram for the settings
     private static final String ACTIVATION_KEYPHRASE = "mister crazy car";
     private static final String ACTIONS_KEYWORDS = "forward|backward|reverse|left|right|good job|stop";
 
@@ -49,9 +50,6 @@ public class PocketSphinx implements RecognitionListener {
         Log.d(TAG, "onBeginningOfSpeech");
     }
 
-    /**
-     * We stop recognizer here to get a final result
-     */
     @Override
     public void onEndOfSpeech() {
         Log.d(TAG, "onEndOfSpeech");
@@ -167,6 +165,7 @@ public class PocketSphinx implements RecognitionListener {
         recognizer.addKeyphraseSearch(WAKEUP_SEARCH, ACTIVATION_KEYPHRASE);
         File actionGrammar = new File(assetsDir, "commands.gram");
         recognizer.addKeywordSearch(ACTION_SEARCH, actionGrammar);
+        // For continuous recognition, keyword search is preferred to grammar search
         //        File actionGrammar = new File(assetsDir, "commands.gram");
         //        recognizer.addGrammarSearch(ACTION_SEARCH, actionGrammar);
     }
