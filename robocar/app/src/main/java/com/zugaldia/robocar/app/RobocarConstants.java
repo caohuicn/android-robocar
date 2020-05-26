@@ -10,7 +10,7 @@ public class RobocarConstants {
   // development) you don't need to worry about this.
 
   // You can borrow these devices at the next DIY Robocars DC meetup
-  public static final String NES30_MAC_ADDRESS = "E4:17:D8:EA:66:68"; // Robo1
+  public static final String NES30_MAC_ADDRESS = "50:77:05:26:BD:BA"; // Robo1
 //  public static final String NES30_MAC_ADDRESS = "E4:17:D8:9D:09:61"; // Robo2
 
 }

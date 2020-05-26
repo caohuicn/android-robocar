@@ -10,6 +10,7 @@ import retrofit2.converter.gson.GsonConverterFactory;
 
 /**
  * Created by antonio on 4/5/17.
+ * FOR DEBUG
  */
 
 public class RobocarClient {

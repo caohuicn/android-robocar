@@ -1,14 +1,14 @@
 apply plugin: 'com.android.application'
-apply plugin: 'com.getkeepsafe.dexcount'
+//apply plugin: 'com.getkeepsafe.dexcount'
 
 android {
-    compileSdkVersion 25
-    buildToolsVersion "25.0.3"
+    compileSdkVersion rootProject.ext.compileSdkVersion
+    buildToolsVersion rootProject.ext.buildToolsVersion
 
     defaultConfig {
         applicationId "com.zugaldia.robocar.app"
-        minSdkVersion 24
-        targetSdkVersion 25
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "0.1-SNAPSHOT"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
@@ -22,36 +22,46 @@ android {
         }
     }
 
-    splits {
-        abi {
-            // Enables building multiple APKs per ABI.
-            enable true
-
-            // Resets the list of ABIs that Gradle should create APKs for to none.
-            reset()
-
-            // Specifies a list of ABIs that Gradle should create APKs for (Pico, Raspberry Pi only).
-            // Options are: armeabi-v7a, armeabi
-            include "armeabi"
-
-            // Specifies that we do not want to also generate a universal APK that includes all ABIs.
-            universalApk false
-        }
-    }
+//    splits {
+//        abi {
+//            // Enables building multiple APKs per ABI.
+//            enable true
+//
+//            // Resets the list of ABIs that Gradle should create APKs for to none.
+//            reset()
+//
+//            // Specifies a list of ABIs that Gradle should create APKs for (Pico, Raspberry Pi only).
+//            // Options are: armeabi-v7a, armeabi
+//            include "armeabi"
+//
+//            // Specifies that we do not want to also generate a universal APK that includes all ABIs.
+//            universalApk false
+//        }
+//    }
 }
 
 dependencies {
     // Our shared libraries
-    compile project(':libhardware')
-    compile project(':libsoftware')
-    //compile project(':libcv')
+    implementation project(':libhardware')
+    implementation project(':libsoftware')
+    implementation project(':libcv')
 
     // Android Support Libraries
-    compile 'com.android.support:appcompat-v7:25.3.1'
+    implementation 'com.android.support:support-v4:27+'
+    implementation 'com.android.support:appcompat-v7:27+'
+    implementation 'com.google.android.things:androidthings:+'
+    implementation 'org.nanohttpd:nanohttpd:2.3.1'
+    implementation 'com.jakewharton.timber:timber:4.5.1'
+    implementation 'edu.cmu.pocketsphinx:pocketsphinx-android:5prealpha-release@aar'
+    implementation project(':cmusphinx-models')
+
+    // Relinker
+    // https://github.com/bytedeco/javacpp-presets/wiki/The-UnsatisfiedLinkError-X-File-(a-real-experience)
+    implementation 'com.getkeepsafe.relinker:relinker:1.2.2'
 
     // Testing
-    testCompile 'junit:junit:4.12'
-    androidTestCompile('com.android.support.test.espresso:espresso-core:2.2.2', {
+    testImplementation 'junit:junit:4.12'
+    androidTestImplementation('com.android.support.test.espresso:espresso-core:2.2.2', {
         exclude group: 'com.android.support', module: 'support-annotations'
     })
 }

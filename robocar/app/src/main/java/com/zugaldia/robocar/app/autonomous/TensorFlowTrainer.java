@@ -3,6 +3,7 @@ package com.zugaldia.robocar.app.autonomous;
 import android.content.Context;
 import android.media.ImageReader;
 
+import com.zugaldia.robocar.app.manual.MotorInfo;
 import com.zugaldia.robocar.hardware.adafruit2348.AdafruitMotorHat;
 import com.zugaldia.robocar.software.camera.CameraOperator;
 import com.zugaldia.robocar.software.camera.CameraOperatorListener;
@@ -23,24 +24,20 @@ import timber.log.Timber;
 public class TensorFlowTrainer implements
     CameraOperatorListener, ImageReader.OnImageAvailableListener {
 
-  private AdafruitMotorHat motorHat;
+  private MotorInfo motorInfo;
   private CameraOperator cameraOperator;
 
   private String sessionId;
   private int sessionCount;
   private Timer timer;
 
-  public TensorFlowTrainer(Context context, AdafruitMotorHat motorHat) {
-    this.motorHat = motorHat;
+  public TensorFlowTrainer(Context context, MotorInfo motorInfo) {
+    this.motorInfo = motorInfo;
     cameraOperator = new CameraOperator(context, this);
   }
 
   public int[] getSpeeds() {
-    return new int[] {
-        motorHat.getMotor(1).getLastSpeed(),
-        motorHat.getMotor(2).getLastSpeed(),
-        motorHat.getMotor(3).getLastSpeed(),
-        motorHat.getMotor(4).getLastSpeed()};
+    return motorInfo.getSpeeds();
   }
 
   public void startSession() {

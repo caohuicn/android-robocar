@@ -20,4 +20,8 @@ public interface HTTPRequestListener {
   RobocarResponse onMove(RobocarMove move);
 
   RobocarResponse onSpeed(RobocarSpeed speed);
+
+  RobocarResponse onDrive();
+
+  RobocarResponse onRecord();
 }
