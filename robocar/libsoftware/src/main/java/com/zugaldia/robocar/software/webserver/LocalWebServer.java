@@ -29,6 +29,8 @@ public class LocalWebServer extends NanoHTTPD {
   public static final String ENDPOINT_GET_STATUS = "api/status";
   public static final String ENDPOINT_POST_MOVE = "api/move";
   public static final String ENDPOINT_POST_SPEED = "api/speed";
+  public static final String ENDPOINT_POST_RECORD = "api/record";
+  public static final String ENDPOINT_POST_DRIVE = "api/drive";
 
   private HTTPRequestListener requestListener;
 
@@ -67,6 +69,12 @@ public class LocalWebServer extends NanoHTTPD {
           case ENDPOINT_ROOT + ENDPOINT_POST_SPEED:
             RobocarSpeed speed = (RobocarSpeed)readPostAsObject(session, RobocarSpeed.class);
             result = requestListener.onSpeed(speed);
+            break;
+          case ENDPOINT_ROOT + ENDPOINT_POST_RECORD:
+            result = requestListener.onRecord();
+            break;
+          case ENDPOINT_ROOT + ENDPOINT_POST_DRIVE:
+            result = requestListener.onDrive();
             break;
           default:
             // No action.
@@ -112,7 +120,7 @@ public class LocalWebServer extends NanoHTTPD {
     Timber.d("Parameters present: %b", session.getParameters() != null);
   }
 
-  private static Object readPostAsObject(IHTTPSession session, Class clazz) {
+  private static String readPostString(IHTTPSession session){
     Map<String, String> files = new HashMap<>();
 
     try {
@@ -122,7 +130,12 @@ public class LocalWebServer extends NanoHTTPD {
       return null;
     }
 
-    String postBody = files.get("postData");
+    return files.get("postData");
+  }
+
+  private static Object readPostAsObject(IHTTPSession session, Class clazz) {
+    String postBody = readPostString(session);
+    Timber.v("Request body: %s", postBody);
     return new GsonBuilder().create().fromJson(postBody, clazz);
   }
 }

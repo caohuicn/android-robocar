@@ -1,0 +1,7 @@
+forward /1e-15/
+backward /1e-17/
+reverse /1e-17/
+left /1e-15/
+right /1e-15/
+good job /1e-30/
+stop /1e-20/

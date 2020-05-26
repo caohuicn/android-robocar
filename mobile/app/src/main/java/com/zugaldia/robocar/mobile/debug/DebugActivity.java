@@ -248,4 +248,17 @@ public class DebugActivity extends AppCompatActivity
     return new RobocarResponse(200, String.format(
         "Speed change: %d/%d", speed.getLeft(), speed.getRight()));
   }
+
+  @Override
+  public RobocarResponse onDrive() {
+    return new RobocarResponse(200,
+            "Toggle onDrive");
+  }
+
+  @Override
+  public RobocarResponse onRecord() {
+    return new RobocarResponse(200,
+            "Toggle onRecord");
+  }
+
 }

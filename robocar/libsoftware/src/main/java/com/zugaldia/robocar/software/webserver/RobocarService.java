@@ -25,4 +25,10 @@ public interface RobocarService {
   @POST(LocalWebServer.ENDPOINT_POST_SPEED)
   Call<RobocarResponse> postSpeed(@Body RobocarSpeed speed);
 
+  @POST(LocalWebServer.ENDPOINT_POST_RECORD)
+  Call<RobocarResponse> postRecord();
+
+  @POST(LocalWebServer.ENDPOINT_POST_DRIVE)
+  Call<RobocarResponse> postDrive();
+
 }

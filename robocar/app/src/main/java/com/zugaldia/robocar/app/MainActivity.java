@@ -1,20 +1,15 @@
 package com.zugaldia.robocar.app;
 
-import android.bluetooth.BluetoothDevice;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
-import android.view.KeyEvent;
+import android.util.Log;
 
-import com.zugaldia.robocar.app.autonomous.CameraDriver;
 import com.zugaldia.robocar.app.autonomous.TensorFlowTrainer;
-import com.zugaldia.robocar.app.manual.RCDriver;
-import com.zugaldia.robocar.app.manual.LocalhostDriver;
-import com.zugaldia.robocar.hardware.adafruit2348.AdafruitMotorHat;
-import com.zugaldia.robocar.software.controller.nes30.Nes30Connection;
-import com.zugaldia.robocar.software.controller.nes30.Nes30Listener;
-import com.zugaldia.robocar.software.controller.nes30.Nes30Manager;
-import com.zugaldia.robocar.software.webserver.LocalWebServer;
+import com.zugaldia.robocar.app.manual.L298NDriver;
+import com.zugaldia.robocar.app.speech.PocketSphinx;
+import com.zugaldia.robocar.app.speech.TtsSpeaker;
 import com.zugaldia.robocar.software.webserver.HTTPRequestListener;
+import com.zugaldia.robocar.software.webserver.LocalWebServer;
 import com.zugaldia.robocar.software.webserver.models.RobocarMove;
 import com.zugaldia.robocar.software.webserver.models.RobocarResponse;
 import com.zugaldia.robocar.software.webserver.models.RobocarSpeed;
@@ -25,190 +20,206 @@ import java.io.IOException;
 import fi.iki.elonen.NanoHTTPD;
 import timber.log.Timber;
 
-public class MainActivity extends AppCompatActivity implements Nes30Listener, HTTPRequestListener {
+public class MainActivity extends AppCompatActivity implements HTTPRequestListener, TtsSpeaker.Listener, PocketSphinx.Listener {
 
-  private Nes30Manager nes30Manager;
-  private Nes30Connection nes30Connection;
+    private L298NDriver l298NDriver;
 
-  private AdafruitMotorHat motorHat;
+    private TensorFlowTrainer tensorFlowTrainer;
 
-  private RCDriver rcDriver;
-  private LocalhostDriver localhostDriver;
+    private LocalWebServer localWebServer;
 
-  private CameraDriver cameraDriver;
-  private TensorFlowTrainer tensorFlowTrainer;
-
-  // I2C Name
-  public static final String I2C_DEVICE_NAME = "I2C1";
-  // Adafruit Motor Hat
-  private static final int MOTOR_HAT_I2C_ADDRESS = 0x60;
-
-  @Override
-  protected void onCreate(Bundle savedInstanceState) {
-    super.onCreate(savedInstanceState);
-    setContentView(R.layout.activity_main);
-
-    // Motors
-    motorHat = new AdafruitMotorHat(I2C_DEVICE_NAME, MOTOR_HAT_I2C_ADDRESS, false);
-
-    // Remote control (for RCDriver)
-    setupBluetooth();
-
-    // Local web server (for LocalhostDriver)
-    setupWebServer();
-
-    // Manual drivers (always available)
-    rcDriver = new RCDriver(motorHat);
-    localhostDriver = new LocalhostDriver(motorHat);
-  }
-
-
-  private void setupWebServer() {
-    LocalWebServer localWebServer = new LocalWebServer(this);
-    try {
-      localWebServer.start();
-    } catch (IOException e) {
-      Timber.e(e, "Failed to start local web server.");
-    }
-  }
-
-  private void setupBluetooth() {
-    nes30Manager = new Nes30Manager(this);
-    nes30Connection = new Nes30Connection(this, RobocarConstants.NES30_MAC_ADDRESS);
-    Timber.d("BT status: %b", nes30Connection.isEnabled());
-    Timber.d("Paired devices: %d", nes30Connection.getPairedDevices().size());
-
-    BluetoothDevice nes30device = nes30Connection.getSelectedDevice();
-    if (nes30device == null) {
-      Timber.d("Starting discovery: %b", nes30Connection.startDiscovery());
-    } else {
-      Timber.d("Creating bond: %b", nes30Connection.createBond(nes30device));
-    }
-  }
-
-  @Override
-  protected void onDestroy() {
-    super.onDestroy();
-    rcDriver.release();
-    motorHat.close();
-    nes30Connection.cancelDiscovery();
-  }
-
-  /*
-   * Handle keyboard (controller) events
-   */
-
-  @Override
-  public boolean onKeyDown(int keyCode, KeyEvent event) {
-    return nes30Manager.onKeyDown(keyCode, event);
-  }
-
-  @Override
-  public boolean onKeyLongPress(int keyCode, KeyEvent event) {
-    return nes30Manager.onKeyLongPress(keyCode, event);
-  }
-
-  @Override
-  public boolean onKeyUp(int keyCode, KeyEvent event) {
-    return nes30Manager.onKeyUp(keyCode, event);
-  }
-
-  @Override
-  public boolean onKeyMultiple(int keyCode, int count, KeyEvent event) {
-    return nes30Manager.onKeyMultiple(keyCode, count, event);
-  }
-
-  /*
-   * Implements Nes30Listener
-   */
-
-  @Override
-  public void onKeyPress(@Nes30Manager.ButtonCode int keyCode, boolean isDown) {
-    switch (keyCode) {
-      case Nes30Manager.BUTTON_UP_CODE:
-        rcDriver.moveForward(keyCode, isDown);
-        break;
-      case Nes30Manager.BUTTON_DOWN_CODE:
-        rcDriver.moveBackward(keyCode, isDown);
-        break;
-      case Nes30Manager.BUTTON_LEFT_CODE:
-        rcDriver.turnLeft(keyCode, isDown);
-        break;
-      case Nes30Manager.BUTTON_RIGHT_CODE:
-        rcDriver.turnRight(keyCode, isDown);
-        break;
-      case Nes30Manager.BUTTON_X_CODE:
-        if (isDown) {
-          Timber.d("Starting camera session for single pics.");
-        }
-        break;
-      case Nes30Manager.BUTTON_Y_CODE:
-        if (isDown) {
-          Timber.d("Starting camera session for multiple pics.");
-          if (tensorFlowTrainer == null) {
-            tensorFlowTrainer = new TensorFlowTrainer(this, motorHat);
-          }
-          tensorFlowTrainer.startSession();
-        }
-        break;
-      case Nes30Manager.BUTTON_A_CODE:
-        if (isDown) {
-          Timber.d("Stopping camera session.");
-          tensorFlowTrainer.endSession();
-        }
-        break;
-      case Nes30Manager.BUTTON_B_CODE:
-        Timber.d("Button B pressed.");
-        break;
-      case Nes30Manager.BUTTON_L_CODE:
-        if (cameraDriver == null) {
-          cameraDriver = new CameraDriver(this, motorHat);
-        }
-        cameraDriver.start();
-        break;
-      case Nes30Manager.BUTTON_R_CODE:
-        if (cameraDriver != null) {
-          cameraDriver.stop();
-        }
-        break;
-      case Nes30Manager.BUTTON_SELECT_CODE:
-        Timber.d("Select button pressed.");
-        break;
-      case Nes30Manager.BUTTON_START_CODE:
-        Timber.d("Start button pressed.");
-        break;
-      case Nes30Manager.BUTTON_KONAMI:
-        // Do your magic here ;-)
-        break;
-    }
-  }
-
-  /*
-   * Implement RequestListener (web server)
-   */
-
-  @Override
-  public void onRequest(NanoHTTPD.IHTTPSession session) {
-    LocalWebServer.logSession(session);
-  }
-
-  @Override
-  public RobocarStatus onStatus() {
-    return new RobocarStatus(200, "OK");
-  }
-
-  @Override
-  public RobocarResponse onMove(RobocarMove move) {
-    return new RobocarResponse(200, "TODO");
-  }
-
-  @Override
-  public RobocarResponse onSpeed(RobocarSpeed speed) {
-    if (speed == null) {
-      return new RobocarResponse(400, "Bad Request");
+    private enum State {
+        INITIALIZING,
+        LISTENING_TO_KEYPHRASE,
+        CONFIRMING_KEYPHRASE,
+        LISTENING_TO_ACTION,
+        CONFIRMING_ACTION,
+        CONFIRMING_DONE_ACTION,
+        TIMEOUT
     }
 
-    localhostDriver.changeSpeed(speed);
-    return new RobocarResponse(200, "OK");
-  }
+    private TtsSpeaker tts;
+    private PocketSphinx pocketsphinx;
+    private State state;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        // Local web server (for LocalhostDriver)
+        setupWebServer();
+
+        // Manual drivers (always available)
+        l298NDriver = new L298NDriver();
+        tts = new TtsSpeaker(this, this);
+    }
+
+    private void setupWebServer() {
+        localWebServer = new LocalWebServer(this);
+        try {
+            localWebServer.start();
+            Timber.i("LocalWebServer listening on " + LocalWebServer.getIpAddress(this) + ":" + localWebServer.getListeningPort());
+        } catch (IOException e) {
+            Timber.e(e, "Failed to start local web server.");
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        l298NDriver.close();
+        localWebServer.stop();
+        tts.onDestroy();
+        pocketsphinx.onDestroy();
+    }
+
+    /*
+     * Implement RequestListener (web server)
+     */
+
+    @Override
+    public void onRequest(NanoHTTPD.IHTTPSession session) {
+        LocalWebServer.logSession(session);
+    }
+
+    @Override
+    public RobocarStatus onStatus() {
+        return new RobocarStatus(200, "OK");
+    }
+
+    @Override
+    public RobocarResponse onMove(RobocarMove move) {
+        return new RobocarResponse(200, "TODO");
+    }
+
+    @Override
+    public RobocarResponse onSpeed(RobocarSpeed speed) {
+        if (speed == null) {
+            return new RobocarResponse(400, "Bad Request");
+        }
+
+        l298NDriver.changeSpeed(speed);
+        return new RobocarResponse(200, "OK. Speed set to " + speed);
+    }
+
+    @Override
+    public RobocarResponse onDrive() {
+//        if (cameraDriver == null) {
+//            cameraDriver = new CameraDriver(this, motorHat);
+//            cameraDriver.start();
+//        }else{
+//            cameraDriver.stop();
+//            cameraDriver = null;
+//        }
+        return new RobocarResponse(200, "OK. ");
+    }
+
+    @Override
+    public RobocarResponse onRecord() {
+        String message = "OK. ";
+        if (tensorFlowTrainer == null) {
+            tensorFlowTrainer = new TensorFlowTrainer(this, l298NDriver);
+            tensorFlowTrainer.startSession();
+            message += "Recording started.";
+        } else {
+            tensorFlowTrainer.endSession();
+            tensorFlowTrainer = null;
+            message += "Recording ended.";
+        }
+        return new RobocarResponse(200, message);
+    }
+
+    @Override
+    public void onTtsInitialized() {
+        // There's no runtime permissions on Android Things.
+        // Otherwise, we would first have to ask for the Manifest.permission.RECORD_AUDIO
+        pocketsphinx = new PocketSphinx(this, this);
+    }
+
+    @Override
+    public void onTtsSpoken() {
+        updateRecognizerState();
+    }
+
+    private void updateRecognizerState() {
+        switch (state) {
+            case INITIALIZING:
+            case CONFIRMING_DONE_ACTION:
+            case TIMEOUT:
+                state = State.LISTENING_TO_KEYPHRASE;
+                pocketsphinx.startListeningToActivationPhrase();
+                break;
+            case CONFIRMING_ACTION:
+                //restart action search without having to activate
+            case CONFIRMING_KEYPHRASE:
+                state = State.LISTENING_TO_ACTION;
+                pocketsphinx.startListeningToAction();
+                break;
+        }
+    }
+
+    @Override
+    public void onSpeechRecognizerReady() {
+        state = State.INITIALIZING;
+        tts.say("I'm ready!");
+        Log.d("MainActivity", "I'm ready");
+    }
+
+    @Override
+    public void onActivationPhraseDetected() {
+        state = State.CONFIRMING_KEYPHRASE;
+        tts.say("Yup?");
+    }
+
+    private static final int SPEED_NORMAL = 70;
+    private static final int SPEED_TURNING_INSIDE = 50;
+    private static final int SPEED_TURNING_OUTSIDE = 150;
+
+    @Override
+    public void onTextRecognized(String recognizedText) {
+        Log.d("MainActivity", recognizedText);
+        state = State.CONFIRMING_ACTION;
+        String input = recognizedText == null ? "" : recognizedText.trim();
+        RobocarSpeed speed = new RobocarSpeed();
+        String answer;
+        //test for "stop" first, in case we receive "left right stop"
+        if (input.contains("stop")) {
+            answer = "Stopping";
+            speed.setLeft(0);
+            speed.setRight(0);
+        } else if (input.contains("good job")) {
+            answer = "Thank you!";
+            speed.setLeft(0);
+            speed.setRight(0);
+            state = State.CONFIRMING_DONE_ACTION;
+        } else if (input.contains("forward")) {
+            answer = "Moving";
+            speed.setLeft(SPEED_NORMAL);
+            speed.setRight(SPEED_NORMAL);
+        } else if (input.contains("backward") || input.contains("reverse")) {
+            answer = "Backing";
+            speed.setLeft(-SPEED_NORMAL);
+            speed.setRight(-SPEED_NORMAL);
+        } else if (input.contains("left")) {
+            answer = "Turning";
+            speed.setLeft(SPEED_TURNING_INSIDE);
+            speed.setRight(SPEED_TURNING_OUTSIDE);
+        } else if (input.contains("right")) {
+            answer = "Turning";
+            speed.setLeft(SPEED_TURNING_OUTSIDE);
+            speed.setRight(SPEED_TURNING_INSIDE);
+        } else {
+            answer = "Sorry, I didn't understand you.";
+        }
+        //better not let tts repeat the same keywords to avoid recognizing it again
+        tts.say(answer);
+        l298NDriver.changeSpeed(speed);
+    }
+
+    @Override
+    public void onTimeout() {
+        state = State.TIMEOUT;
+        tts.say("Timeout! Talk to you later.");
+    }
 }

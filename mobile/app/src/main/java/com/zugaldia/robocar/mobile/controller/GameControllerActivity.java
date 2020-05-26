@@ -12,12 +12,19 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageButton;
+import android.widget.RadioButton;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.ToggleButton;
 
 import com.zugaldia.robocar.mobile.R;
 import com.zugaldia.robocar.mobile.client.RobocarRestClient;
 import com.zugaldia.robocar.mobile.client.RobocarClient;
+
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
@@ -44,6 +51,12 @@ public class GameControllerActivity extends AppCompatActivity implements Navigat
     @BindView(R.id.upArrowButton)
     ImageButton upArrowButton;
 
+    @BindView(R.id.upLeftArrowButton)
+    ImageButton upLeftArrowButton;
+
+    @BindView(R.id.upRightArrowButton)
+    ImageButton upRightArrowButton;
+
     @BindView(R.id.downArrowButton)
     ImageButton downArrowButton;
 
@@ -59,11 +72,33 @@ public class GameControllerActivity extends AppCompatActivity implements Navigat
     @BindView(R.id.joystickButton)
     ImageButton joystickButton;
 
+    @BindView(R.id.gear1Button)
+    RadioButton gear1Button;
+
+    @BindView(R.id.gear2Button)
+    RadioButton gear2Button;
+
+    @BindView(R.id.gear3Button)
+    RadioButton gear3Button;
+
+    @BindView(R.id.recordToggleButton)
+    ToggleButton recordToggleButton;
+
+    @BindView(R.id.autonomousToggleButton)
+    ToggleButton autonomousToggleButton;
+
     int lastLeftSpeed = 0;
     int lastRightSpeed = 0;
 
-    int SPEED_FULL = 255;
-    int SPEED_LOW = 95;
+    int MIN_SPEED = 56;
+    int MAX_SPEED = 255;
+    int SPEED_STEPS = 4;
+    int MIN_TURN_SPEED = 100;
+    int SPEED_FULL = 100;
+    int SPEED_LOW = MIN_SPEED;
+    int SPEED_CHANGE = (SPEED_FULL - SPEED_LOW)/SPEED_STEPS;
+
+    private InertiaController inertiaController;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -72,28 +107,81 @@ public class GameControllerActivity extends AppCompatActivity implements Navigat
         setContentView(R.layout.activity_controller);
         ButterKnife.bind(this);
         initNavigationDrawer();
+        inertiaController = new InertiaController();
     }
 
     @OnTouch({
             R.id.upArrowButton,
+            R.id.upLeftArrowButton,
+            R.id.upRightArrowButton,
             R.id.downArrowButton,
             R.id.leftArrowButton,
             R.id.rightArrowButton,
             R.id.leftButton,
             R.id.rightButton,
             R.id.joystickButton,
+            R.id.gear1Button,
+            R.id.gear2Button,
+            R.id.recordToggleButton,
+            R.id.autonomousToggleButton,
     })
     public boolean onTouch(View v, MotionEvent event) {
-        if (v == upArrowButton || v == downArrowButton || v == leftArrowButton || v == rightArrowButton)
+        if (v == upArrowButton || v == downArrowButton || v == leftArrowButton || v == rightArrowButton || v == upLeftArrowButton || v == upRightArrowButton)
             return handleArrowButtonEvent(v, event);
         if (v == leftButton || v == rightButton)
             return handleSlideButtonEvent(v, event);
-        if(v==joystickButton)
+        if(v == joystickButton)
             return handleJoystickButtonEvent(v,event);
+        if (v == gear1Button || v == gear2Button || v == gear3Button)
+            return handleGearButtonEvent(v,event);
+        if (v == recordToggleButton)
+            return handleRecordButtonEvent(v,event);
+        if (v == autonomousToggleButton)
+            return handleDriveButtonEvent(v,event);
+
+        return false;
+    }
+
+    private boolean handleDriveButtonEvent(View v, MotionEvent event) {
+        try {
+            RobocarClient service= new RobocarRestClient("http://"+this.webserviceUrlTextView.getText());
+            service.toggleDrive();
+        }catch(Exception e) {
+            Toast.makeText(this, "Unable to communicate with Robocar: "+e.getMessage(), Toast.LENGTH_SHORT).show();
+            Timber.d(e.getMessage());
+        }
+        //to switch state
+        return false;
+    }
+
+    private boolean handleRecordButtonEvent(View v, MotionEvent event) {
+        try {
+            RobocarClient service= new RobocarRestClient("http://"+this.webserviceUrlTextView.getText());
+            service.toggleRecord();
+        }catch(Exception e) {
+            Toast.makeText(this, "Unable to communicate with Robocar: "+e.getMessage(), Toast.LENGTH_SHORT).show();
+            Timber.d(e.getMessage());
+        }
+        return false;
+    }
+
+    public boolean handleGearButtonEvent(View v, MotionEvent event){
+        if (v == gear1Button){
+            SPEED_FULL = 100;
+            SPEED_LOW = MIN_SPEED;
+        }else if (v == gear2Button){
+            SPEED_FULL = 150;
+            SPEED_LOW = 95;
+        }else{
+            SPEED_FULL = MAX_SPEED;
+            SPEED_LOW = 140;
+        }
+        SPEED_CHANGE = (SPEED_FULL - SPEED_LOW)/SPEED_STEPS;
         return false;
     }
 
     public boolean handleJoystickButtonEvent(View v, MotionEvent event){
+        inertiaController.stop();
         boolean buttonPressed = (event.getAction() & MotionEvent.ACTION_MASK) == MotionEvent.ACTION_DOWN;
         boolean buttonReleased = (event.getAction() & MotionEvent.ACTION_MASK) == MotionEvent.ACTION_UP;
         if(buttonPressed){
@@ -190,10 +278,13 @@ public class GameControllerActivity extends AppCompatActivity implements Navigat
             }
         }
 
+        inertiaController.start();
         return true;
     }
 
     boolean isUpArrowPressed = false;
+    boolean isUpLeftArrowPressed = false;
+    boolean isUpRightArrowPressed = false;
     boolean isDownArrowPressed = false;
     boolean isLeftArrowPressed = false;
     boolean isRightArrowPressed = false;
@@ -214,6 +305,12 @@ public class GameControllerActivity extends AppCompatActivity implements Navigat
         if(v == this.upArrowButton)
             this.isUpArrowPressed = isArrowButtonPressed(this.isUpArrowPressed,event);
 
+        if(v == this.upLeftArrowButton)
+            this.isUpLeftArrowPressed = isArrowButtonPressed(this.isUpLeftArrowPressed,event);
+
+        if(v == this.upRightArrowButton)
+            this.isUpRightArrowPressed = isArrowButtonPressed(this.isUpRightArrowPressed,event);
+
         if(v == this.downArrowButton)
             this.isDownArrowPressed = isArrowButtonPressed(this.isDownArrowPressed,event);
 
@@ -225,35 +322,102 @@ public class GameControllerActivity extends AppCompatActivity implements Navigat
     }
 
     public boolean handleArrowButtonEvent(View v, MotionEvent event) {
-
+        inertiaController.stop();
         setArrowButtonStates(v, event);
 
-        boolean allReleased = !isUpArrowPressed && !isDownArrowPressed && !isLeftArrowPressed && !isRightArrowPressed;
-
-        int leftSpeed = 0;
-        int rightSpeed = 0;
+        boolean allReleased = !isUpArrowPressed && !isUpLeftArrowPressed && !isUpRightArrowPressed &&
+                !isDownArrowPressed && !isLeftArrowPressed && !isRightArrowPressed;
 
         if (allReleased) {
-            leftSpeed = 0;
-            rightSpeed = 0;
+            //TODO long press handling
+            return true;
         }
 
+        if (event.getAction() == MotionEvent.ACTION_MOVE){
+            return true;
+        }
+
+        int leftSpeed = lastLeftSpeed;
+        int rightSpeed = lastRightSpeed;
+
         if(isUpArrowPressed){
-            leftSpeed = isLeftArrowPressed?SPEED_LOW:SPEED_FULL;
-            rightSpeed = isRightArrowPressed?SPEED_LOW:SPEED_FULL;
+            if (isLeftArrowPressed) {
+                //keep turning while accelerating
+                leftSpeed = changeSpeed(lastLeftSpeed, false, SPEED_CHANGE/2);
+                rightSpeed = changeSpeed(lastRightSpeed, true, SPEED_CHANGE/2);
+            }else if ( isRightArrowPressed){
+                leftSpeed = changeSpeed(lastLeftSpeed, true, SPEED_CHANGE/2);
+                rightSpeed = changeSpeed(lastRightSpeed, false, SPEED_CHANGE/2);
+            }else{
+                //pull straight
+                if (lastLeftSpeed != lastRightSpeed){
+                    //during turning, init to low speed
+                    leftSpeed = rightSpeed = SPEED_LOW;
+                }else {
+                    leftSpeed = rightSpeed = changeSpeed(lastLeftSpeed, true, SPEED_CHANGE);
+                }
+            }
+        }
+        else if (isUpLeftArrowPressed){
+            leftSpeed = MIN_SPEED;
+            if (lastLeftSpeed == lastRightSpeed){
+                rightSpeed = MIN_SPEED + SPEED_CHANGE;
+            }
+            else{
+                rightSpeed = changeSpeed(lastRightSpeed, true, SPEED_CHANGE/2);
+            }
+        }
+        else if (isUpRightArrowPressed){
+            rightSpeed = MIN_SPEED;
+            if (lastLeftSpeed == lastRightSpeed){
+                leftSpeed = MIN_SPEED + SPEED_CHANGE;
+            }
+            else {
+                leftSpeed = changeSpeed(lastLeftSpeed, true, SPEED_CHANGE / 2);
+            }
+            //rightSpeed = changeSpeed(lastRightSpeed, false, SPEED_CHANGE/2);
         }
         else if(isDownArrowPressed){
-            leftSpeed = isLeftArrowPressed?-SPEED_LOW:-SPEED_FULL;
-            rightSpeed = isRightArrowPressed?-SPEED_LOW:-SPEED_FULL;
+            if (isLeftArrowPressed) {
+                //keep turning while decelerating
+                leftSpeed = changeSpeed(lastLeftSpeed, false, SPEED_CHANGE / 2);
+                rightSpeed = changeSpeed(lastRightSpeed, true, SPEED_CHANGE / 2);
+            }else if (isRightArrowPressed){
+                //keep turning while decelerating
+                leftSpeed = changeSpeed(lastLeftSpeed, true, SPEED_CHANGE/2);
+                rightSpeed = changeSpeed(lastRightSpeed, false, SPEED_CHANGE/2);
+            }else{
+                //back straight
+                if (lastLeftSpeed != lastRightSpeed){
+                    leftSpeed = rightSpeed = -SPEED_LOW;
+                }else{
+                    leftSpeed = rightSpeed = changeSpeed(lastLeftSpeed, false, SPEED_CHANGE);
+                }
+            }
         }
         else if(isLeftArrowPressed){
-            leftSpeed=-SPEED_FULL;
-            rightSpeed=SPEED_FULL;
+            if (lastLeftSpeed == lastRightSpeed){
+                //starts to turn, use minimum effective turn speed
+                leftSpeed = -MIN_TURN_SPEED;
+                rightSpeed = MIN_TURN_SPEED;
+            }else{
+                leftSpeed = changeSpeed(lastLeftSpeed, false, SPEED_CHANGE);
+                rightSpeed = changeSpeed(lastRightSpeed, true, SPEED_CHANGE);
+            }
         }
         else if(isRightArrowPressed){
-            leftSpeed = SPEED_FULL;
-            rightSpeed = -SPEED_FULL;
+            if (lastLeftSpeed == lastRightSpeed){
+                //starts to turn, use minimum effective turn speed
+                leftSpeed = MIN_TURN_SPEED;
+                rightSpeed = -MIN_TURN_SPEED;
+            }else {
+                leftSpeed = changeSpeed(lastLeftSpeed, true, SPEED_CHANGE);
+                rightSpeed = changeSpeed(lastRightSpeed, false, SPEED_CHANGE);
+            }
         }
+
+        leftSpeed = normalizeSpeed(leftSpeed);
+        rightSpeed = normalizeSpeed(rightSpeed);
 
         if(lastLeftSpeed != leftSpeed && lastRightSpeed != rightSpeed)
             setSpeed(leftSpeed,rightSpeed);
@@ -264,11 +428,52 @@ public class GameControllerActivity extends AppCompatActivity implements Navigat
 
         lastLeftSpeed = leftSpeed;
         lastRightSpeed = rightSpeed;
-
+        inertiaController.start();
         return true;
     }
 
+    private int changeSpeed(int lastSpeed, boolean accelerate, int delta){
+        int speed;
+        if (accelerate){
+            if (lastSpeed >= -SPEED_LOW && lastSpeed < 0){
+                speed = 0;
+            }else if (lastSpeed >= 0 && lastSpeed < SPEED_LOW){
+                speed = SPEED_LOW;
+            }else {
+                speed = Math.min(SPEED_FULL, lastSpeed + delta);
+            }
+        }else{
+            if (lastSpeed > 0 && lastSpeed <= SPEED_LOW){
+                speed = 0;
+            }else if (lastSpeed <= 0 && lastSpeed > -SPEED_LOW){
+                speed = -SPEED_LOW;
+            }else{
+                speed =Math.max(-SPEED_FULL, lastSpeed - delta);
+            }
+        }
+        return speed;
+    }
+
+    private int getUnsignedSpeed(int speed) {
+        int unsignedSpeed = Math.abs(speed);
+        if (unsignedSpeed < MIN_SPEED) {
+            if (unsignedSpeed < MIN_SPEED/2)
+                unsignedSpeed = 0;
+            else
+                unsignedSpeed = MIN_SPEED;
+        }else if (unsignedSpeed > MAX_SPEED){
+            unsignedSpeed = MAX_SPEED;
+        }
+        return unsignedSpeed;
+    }
+
+    private int normalizeSpeed(int speed){
+        int unsignedSpeed = getUnsignedSpeed(speed);
+        return speed>=0?unsignedSpeed:-unsignedSpeed;
+    }
+
     public boolean handleSlideButtonEvent(View v, MotionEvent event) {
+        inertiaController.stop();
         boolean buttonReleased = (event.getAction() & MotionEvent.ACTION_MASK) == MotionEvent.ACTION_UP;
 
         Button button = null;
@@ -290,9 +495,10 @@ public class GameControllerActivity extends AppCompatActivity implements Navigat
         if (button == null || textView == null)
             return false;
 
-        int speed = 0;
-        if (!buttonReleased)
-            speed = calculateSpeedFromSliderViewTouchEvent(v, event);
+        if (buttonReleased){
+            return true;
+        }
+        int speed = calculateSpeedFromSliderViewTouchEvent(v, event);
 
         // update only if last speed has changed.
         boolean needsUpdate = (isLeft && lastLeftSpeed != speed) || (isRight && lastRightSpeed != speed);
@@ -303,6 +509,7 @@ public class GameControllerActivity extends AppCompatActivity implements Navigat
             if (isLeft) lastLeftSpeed = speed;
             if (isRight) lastRightSpeed = speed;
         }
+        inertiaController.start();
         return true;
     }
 
@@ -346,6 +553,7 @@ public class GameControllerActivity extends AppCompatActivity implements Navigat
         SharedPreferences.Editor spe = sp.edit();
         spe.putString("webserviceUrl", webserviceUrlTextView.getText().toString());
         spe.commit();
+        inertiaController.stop();
     }
 
     @Override
@@ -356,6 +564,7 @@ public class GameControllerActivity extends AppCompatActivity implements Navigat
         String baseUrl = sp.getString("webserviceUrl", "");
         if (baseUrl != null && !baseUrl.isEmpty())
             this.webserviceUrlTextView.setText(baseUrl);
+        inertiaController.start();
     }
 
     @SuppressWarnings("StatementWithEmptyBody")
@@ -376,5 +585,63 @@ public class GameControllerActivity extends AppCompatActivity implements Navigat
     private void initNavigationDrawer() {
         NavigationView navigationView = (NavigationView) findViewById(R.id.nav_view);
         navigationView.setNavigationItemSelectedListener(this);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        inertiaController.destroy();
+    }
+
+    class InertiaController implements Runnable{
+        int INTERVAL = 1000; //ms
+        private final ScheduledExecutorService scheduler =
+                Executors.newScheduledThreadPool(1);
+        ScheduledFuture<?> jobHandle;
+
+        public void start(){
+            if (jobHandle != null && !jobHandle.isDone()){
+                jobHandle.cancel(true);
+            }
+            jobHandle =
+                    scheduler.scheduleAtFixedRate(this, INTERVAL, INTERVAL, TimeUnit.MILLISECONDS);
+        }
+
+        public void run(){
+            int delta = 5;//less than SPEED_CHANGE
+            int leftSpeed = lastLeftSpeed==0?0:lastLeftSpeed>0?Math.max(0, lastLeftSpeed-delta):Math.min(0, lastLeftSpeed+delta);
+            int rightSpeed = lastRightSpeed==0?0:lastRightSpeed>0?Math.max(0, lastRightSpeed-delta):Math.min(0, lastRightSpeed+delta);
+
+            leftSpeed = normalizeSpeed(leftSpeed);
+            rightSpeed = normalizeSpeed(rightSpeed);
+
+            if(lastLeftSpeed != leftSpeed || lastRightSpeed != rightSpeed) {
+                Timber.d("InertiaController change speed from " + lastLeftSpeed + "/" + lastRightSpeed + " to " + leftSpeed + "/" + rightSpeed);
+            }else{
+                return;
+            }
+
+            if(lastLeftSpeed != leftSpeed && lastRightSpeed != rightSpeed)
+                setSpeed(leftSpeed,rightSpeed);
+            else if(lastLeftSpeed!=leftSpeed)
+                setSpeed(leftSpeed,null);
+            else if(lastRightSpeed!=rightSpeed)
+                setSpeed(null,rightSpeed);
+
+            lastLeftSpeed = leftSpeed;
+            lastRightSpeed = rightSpeed;
+
+        }
+
+        public void stop(){
+            if (jobHandle != null){
+                jobHandle.cancel(true);
+            }
+
+        }
+
+        public void destroy(){
+            scheduler.shutdown();
+        }
     }
 }

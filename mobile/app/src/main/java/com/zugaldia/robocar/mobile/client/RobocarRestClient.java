@@ -1,5 +1,7 @@
 package com.zugaldia.robocar.mobile.client;
 
+import android.util.Log;
+
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.zugaldia.robocar.software.webserver.RobocarService;
@@ -31,10 +33,45 @@ public class RobocarRestClient implements RobocarClient {
         call.enqueue(new Callback<RobocarResponse>() {
             @Override
             public void onResponse(Call<RobocarResponse> call, Response<RobocarResponse> response) {
+                Log.d("RRC.setSpeed", response!=null?response.message():"");
             }
 
             @Override
             public void onFailure(Call<RobocarResponse> call, Throwable t) {
+                Log.d("RRC.setSpeed", t.getMessage());
+            }
+        });
+    }
+
+    @Override
+    public void toggleRecord() {
+        Call<RobocarResponse> call = this.mRobocarService.postRecord();
+        call.enqueue(new Callback<RobocarResponse>() {
+            @Override
+            public void onResponse(Call<RobocarResponse> call, Response<RobocarResponse> response) {
+                Log.d("RRC.record", response!=null?response.message():"");
+            }
+
+            @Override
+            public void onFailure(Call<RobocarResponse> call, Throwable t) {
+                Log.d("RRC.record", t.getMessage());
+            }
+        });
+
+    }
+
+    @Override
+    public void toggleDrive() {
+        Call<RobocarResponse> call = this.mRobocarService.postDrive();
+        call.enqueue(new Callback<RobocarResponse>() {
+            @Override
+            public void onResponse(Call<RobocarResponse> call, Response<RobocarResponse> response) {
+                Log.d("RRC.drive", response!=null?response.message():"");
+            }
+
+            @Override
+            public void onFailure(Call<RobocarResponse> call, Throwable t) {
+                Log.d("RRC.drive", t.getMessage());
             }
         });
     }
